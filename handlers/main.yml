@@ -1,0 +1,3 @@
+---
+- name: debconf agogo
+  command: dpkg-reconfigure locales -f noninteractive

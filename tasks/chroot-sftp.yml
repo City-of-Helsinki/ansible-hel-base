@@ -1,0 +1,23 @@
+- name: Configure sshd for chroot-sftp group
+  copy: src=sshd_sftp_chroot_config dest=/etc/ssh/sshd_config
+
+- name: Reload sshd
+  service: name=ssh state=reloaded
+
+- name: Create sftp-only group
+  group: name=sftp-only state=present system=yes
+
+- name: Add SFTP-only user
+  user: name="{{ common_sftp_only_user }}"
+        comment="SFTP-only data copy user"
+        groups=sftp-only
+
+- name: Change SFTP-only user home directory ownership
+  file: path="/home/{{ common_sftp_only_user }}" group=root owner=root mode=0755 state=directory
+
+- name: Create a directory for incoming files
+  file: path="/home/{{ common_sftp_only_user }}/in" group=sftp-only owner="{{ common_sftp_only_user }}" mode=0755 state=directory
+
+- name: Add authorized keys for SFTP
+  authorized_key: user="{{ common_sftp_only_user }}" key="{{ item }}"
+  with_items: chrooted_sftp_keys

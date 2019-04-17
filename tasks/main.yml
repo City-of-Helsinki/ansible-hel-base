@@ -1,0 +1,89 @@
+- name: Install aptitude to support upgrading all packages
+  apt: pkg=aptitude state=present
+  tags: apt
+
+- name: Upgrade all packages to their latest (stable) versions
+  apt: upgrade=safe update-cache=yes cache_valid_time=86400
+  tags: apt
+  when: upgrade_packages
+
+- name: Install common packages needed for all services and administration
+  apt: pkg={{ item }} state=present update-cache=yes cache_valid_time=86400 autoremove=yes
+  tags: apt
+  with_items:
+  - joe
+  - zsh
+  - git
+  - apt-transport-https
+# This is used by Ansible APT repository handling module
+  - python-pycurl
+# This sets up finnish locales for databases too
+  - language-pack-fi
+# tmux is a moderner screen, good for ad-hoc servers and such
+  - tmux
+# Virtual machines have serious time dilation problems
+  - openntpd
+  - unattended-upgrades
+  - unzip
+  - zip
+# For all your headbanging needs
+  - mosh
+# To ensure that the local hostname is always reachable
+  - libnss-myhostname
+# For Ansible to secure temporary files
+  - acl
+
+- name: Set timezone to Europe/Helsinki
+  timezone:
+    name: Europe/Helsinki
+
+- name: Ensure basic UTF-8 locales exist
+  locale_gen:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - fi_FI.UTF-8
+    - en_US.UTF-8
+
+- name: select default locale
+  debconf:
+    name: locales
+    question: locales/default_environment_locale
+    value: en_US.UTF-8
+    vtype: select
+  notify:
+    - debconf agogo
+
+- name: Add personal accounts for system managers
+  user: name={{ item.name }} comment={{ item.gecos }} shell={{ item.shell }} groups={{ item.groups }} password={{ item.password }} state=present
+  tags: common_admin_users
+  with_items: "{{ common_admin_users }}"
+
+- name: Add per host accounts
+  user: name={{ item.name }} comment={{ item.gecos }} shell={{ item.shell|default(omit) }} groups={{ item.groups|default(omit) }} password={{ item.password|default(omit) }} state=present
+  tags: per_host_users
+  with_items: "{{ per_host_users|default([]) }}"
+
+- name: Remove disabled accounts
+  user: name={{ item }} state=absent
+  with_items: "{{ common_accounts_to_remove }}"
+
+- name: Addings SSH keys for system managers
+  authorized_key: user={{ item.name }} key="{{ item.key }}" exclusive=yes
+  tags: [common_admin_users, ssh-keys]
+  with_items: "{{ common_admin_ssh_keys|default([]) }}"
+
+- name: Addings per host SSH keys
+  authorized_key: user={{ item.name }} key="{{ item.key }}" exclusive=yes
+  tags: [per_host_users, ssh-keys]
+  with_items: "{{ per_host_user_ssh_keys|default([]) }}"
+
+# Initial attempt involved using debconf pre-seeding to create this file, but
+# unfortunately this had complications where deleted file would not be re-created
+# Instead this does it the manual way
+- name: Configure unattended upgrades
+  copy: src=apt_unattended_upgrades dest=/etc/apt/apt.conf.d/20auto-upgrades
+
+- include_tasks: chroot-sftp.yml
+  when: enable_chrooted_sftp
+  tags: chroot-sftp

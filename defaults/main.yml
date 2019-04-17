@@ -1,0 +1,3 @@
+common_accounts_to_remove: []
+enable_chrooted_sftp: no
+upgrade_packages: yes
