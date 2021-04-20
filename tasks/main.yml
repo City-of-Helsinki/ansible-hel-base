@@ -54,6 +54,15 @@
   notify:
     - debconf agogo
 
+# The Azure agent creates a disk-filling amount of sudo log lines
+- name: Disabling sudo logging for Azure agent
+  lineinfile:
+    path: /etc/sudoers
+    line: 'Defaults:omsagent !syslog'
+    insertbefore: '^Defaults	env_reset$'
+    state: present
+    validate: /usr/sbin/visudo -cf %s
+
 - name: Add personal accounts for system managers
   user: name={{ item.name }} comment={{ item.gecos }} shell={{ item.shell }} groups={{ item.groups }} password={{ item.password }} state=present
   tags: common_admin_users
